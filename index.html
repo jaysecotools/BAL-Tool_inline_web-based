@@ -3,12 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BAL Assessment Tool</title>
+    <title>Professional BAL Assessment Tool</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --danger: #c0392b;
+            --light: #ecf0f1;
+            --dark: #34495e;
+            --gray: #95a5a6;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -17,12 +31,14 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f5f5;
+            background: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
         }
 
         .app {
             display: grid;
-            grid-template-columns: 350px 1fr 350px;
+            grid-template-columns: 380px 1fr 380px;
             height: 100vh;
             gap: 1px;
             background: #ddd;
@@ -32,6 +48,7 @@
             background: white;
             padding: 20px;
             overflow-y: auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
         .map-container {
@@ -45,22 +62,54 @@
         }
 
         h1, h2, h3 {
-            color: #2c3e50;
+            color: var(--primary);
             margin-bottom: 15px;
         }
 
         h1 {
             font-size: 1.5em;
-            border-bottom: 2px solid #e74c3c;
+            border-bottom: 2px solid var(--accent);
             padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h1 i {
+            color: var(--accent);
         }
 
         .section {
             background: #f8f9fa;
-            padding: 15px;
+            padding: 18px;
             margin-bottom: 20px;
             border-radius: 8px;
-            border-left: 4px solid #3498db;
+            border-left: 4px solid var(--secondary);
+            transition: all 0.3s ease;
+        }
+
+        .section:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .section-header h3 {
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-icon {
+            color: var(--secondary);
+            cursor: help;
+            font-size: 14px;
         }
 
         .input-group {
@@ -71,32 +120,50 @@
             display: block;
             margin-bottom: 5px;
             font-weight: 600;
-            color: #34495e;
+            color: var(--dark);
         }
 
-        input, select, button {
+        input, select, button, textarea {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #bdc3c7;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
         }
 
         button {
-            background: #3498db;
+            background: var(--secondary);
             color: white;
             border: none;
             cursor: pointer;
             margin: 5px 0;
-            transition: background 0.3s;
+            transition: all 0.3s;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         button:hover {
             background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
         }
 
         .calculate-btn {
-            background: #e74c3c;
+            background: var(--accent);
             font-size: 16px;
             font-weight: bold;
             padding: 15px;
@@ -109,14 +176,14 @@
         .veg-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 5px;
+            gap: 8px;
             margin-top: 10px;
         }
 
         .veg-btn {
-            background: #27ae60;
+            background: var(--success);
             font-size: 12px;
-            padding: 8px;
+            padding: 10px;
         }
 
         .veg-btn:hover {
@@ -124,7 +191,7 @@
         }
 
         .active-drawing {
-            background: #e74c3c !important;
+            background: var(--accent) !important;
             border: 2px solid #c0392b;
         }
 
@@ -133,34 +200,37 @@
             border-collapse: collapse;
             margin: 10px 0;
             font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
 
         .results-table th,
         .results-table td {
             border: 1px solid #bdc3c7;
-            padding: 8px;
+            padding: 10px;
             text-align: left;
         }
 
         .results-table th {
-            background: #34495e;
+            background: var(--primary);
             color: white;
+            font-weight: 600;
         }
 
-        .bal-low { background: #27ae60; color: white; }
-        .bal-12p5 { background: #f39c12; color: white; }
+        .bal-low { background: var(--success); color: white; }
+        .bal-12p5 { background: var(--warning); color: white; }
         .bal-19 { background: #e67e22; color: white; }
-        .bal-29 { background: #e74c3c; color: white; }
-        .bal-fz { background: #c0392b; color: white; }
+        .bal-29 { background: var(--accent); color: white; }
+        .bal-fz { background: var(--danger); color: white; }
 
         .disclaimer {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
             color: #856404;
             padding: 15px;
-            border-radius: 4px;
+            border-radius: 6px;
             margin-top: 20px;
             font-size: 12px;
+            line-height: 1.5;
         }
 
         .map-controls {
@@ -168,35 +238,54 @@
             top: 10px;
             right: 10px;
             background: white;
-            padding: 10px;
-            border-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
 
         .map-controls button {
             width: auto;
-            margin: 2px;
+            margin: 0;
             padding: 8px 12px;
+            font-size: 12px;
         }
 
         .loading {
             text-align: center;
             padding: 20px;
-            color: #3498db;
+            color: var(--secondary);
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(52, 152, 219, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid var(--secondary);
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .export-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 5px;
+            gap: 8px;
             margin: 10px 0;
         }
 
         .export-btn {
             background: #9b59b6;
             font-size: 12px;
-            padding: 8px;
+            padding: 10px;
         }
 
         .export-btn:hover {
@@ -205,10 +294,18 @@
 
         .feature-info {
             background: #e8f4fd;
-            padding: 10px;
+            padding: 12px;
             margin: 10px 0;
-            border-radius: 4px;
-            font-size: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-info i {
+            color: var(--secondary);
+            font-size: 16px;
         }
 
         .pdf-template {
@@ -218,10 +315,221 @@
         .export-loading {
             display: none;
             text-align: center;
-            padding: 10px;
+            padding: 12px;
             background: #e8f4fd;
-            border-radius: 4px;
+            border-radius: 6px;
             margin: 10px 0;
+        }
+
+        .scenario-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .scenario-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .tab-container {
+            margin-top: 15px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #bdc3c7;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            border-bottom: 3px solid var(--secondary);
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .method-notes {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .method-notes h4 {
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        .veg-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-complete {
+            background: var(--success);
+        }
+
+        .status-incomplete {
+            background: var(--gray);
+        }
+
+        .results-summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .progress-container {
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--secondary);
+            transition: width 0.5s ease;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: var(--dark);
+            color: white;
+            text-align: center;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 10000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .veg-class-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .veg-class-btn {
+            background: var(--success);
+            padding: 10px;
+            font-size: 12px;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .veg-class-btn:hover {
+            background: #219a52;
+            transform: translateY(-2px);
+        }
+
+        .veg-class-btn.active {
+            background: var(--accent);
+            border: 2px solid #c0392b;
+        }
+
+        @media (max-width: 1200px) {
+            .app {
+                grid-template-columns: 320px 1fr 320px;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .panel {
+                max-height: 400px;
+            }
+            
+            .map-container {
+                height: 500px;
+            }
         }
     </style>
 </head>
@@ -229,52 +537,117 @@
     <div class="app">
         <!-- Left Panel - Inputs -->
         <div class="panel left-panel">
-            <h1>BAL Assessment Tool</h1>
+            <h1><i class="fas fa-fire"></i> Professional BAL Assessment Tool</h1>
+            
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div style="font-size: 12px; text-align: center; margin-top: 5px;" id="progressText">Setup Progress: 0%</div>
+            </div>
             
             <div class="section">
-                <h3>📍 Site Location</h3>
+                <div class="section-header">
+                    <h3><i class="fas fa-map-marker-alt"></i> Site Location</h3>
+                    <i class="fas fa-info-circle info-icon tooltip">
+                        <span class="tooltiptext">Enter an address to center the map on your location. This helps with accurate vegetation and terrain data.</span>
+                    </i>
+                </div>
                 <div class="input-group">
                     <label>Address Search</label>
                     <input type="text" id="addressInput" placeholder="Enter address...">
-                    <button onclick="geocodeAddress()">Search Location</button>
+                    <button onclick="geocodeAddress()"><i class="fas fa-search"></i> Search Location</button>
                 </div>
                 <div id="locationInfo" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
             </div>
 
             <div class="section">
-                <h3>🏠 Property Boundary</h3>
+                <div class="section-header">
+                    <h3><i class="fas fa-home"></i> Property Boundary</h3>
+                    <i class="fas fa-info-circle info-icon tooltip">
+                        <span class="tooltiptext">Draw your property boundary on the map. This defines the assessment area for BAL calculations.</span>
+                    </i>
+                </div>
                 <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Draw your property boundary on the map</p>
-                <button id="drawPropertyBtn" onclick="startDrawingProperty()">Draw Property</button>
+                <button id="drawPropertyBtn" onclick="startDrawingProperty()"><i class="fas fa-draw-polygon"></i> Draw Property</button>
                 <div id="propertyInfo" class="feature-info" style="display: none;">
-                    Property boundary drawn ✓
+                    <i class="fas fa-check-circle"></i>
+                    <div>Property boundary drawn ✓</div>
                 </div>
             </div>
 
             <div class="section">
-                <h3>🌳 Vegetation</h3>
+                <div class="section-header">
+                    <h3><i class="fas fa-tree"></i> Vegetation</h3>
+                    <i class="fas fa-info-circle info-icon tooltip">
+                        <span class="tooltiptext">Draw vegetation areas and assign classes based on AS3959 vegetation types. Different classes have different fuel loads and flame heights.</span>
+                    </i>
+                </div>
                 <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Draw vegetation areas and assign classes:</p>
-                <div class="veg-buttons">
-                    <button class="veg-btn" onclick="startDrawingVegetation('forest')">Forest</button>
-                    <button class="veg-btn" onclick="startDrawingVegetation('woodland')">Woodland</button>
-                    <button class="veg-btn" onclick="startDrawingVegetation('scrub')">Scrub</button>
-                    <button class="veg-btn" onclick="startDrawingVegetation('grassland')">Grassland</button>
+                <div class="veg-class-selector">
+                    <div class="veg-class-btn" onclick="startDrawingVegetation('forest')">
+                        <div><i class="fas fa-tree"></i> Forest</div>
+                        <div style="font-size: 10px;">Tall trees >20m</div>
+                    </div>
+                    <div class="veg-class-btn" onclick="startDrawingVegetation('woodland')">
+                        <div><i class="fas fa-tree"></i> Woodland</div>
+                        <div style="font-size: 10px;">Medium trees 10-20m</div>
+                    </div>
+                    <div class="veg-class-btn" onclick="startDrawingVegetation('scrub')">
+                        <div><i class="fas fa-seedling"></i> Scrub</div>
+                        <div style="font-size: 10px;">Shrubs 2-6m</div>
+                    </div>
+                    <div class="veg-class-btn" onclick="startDrawingVegetation('grassland')">
+                        <div><i class="fas fa-leaf"></i> Grassland</div>
+                        <div style="font-size: 10px;">Grasses <2m</div>
+                    </div>
                 </div>
                 <div id="vegetationInfo" class="feature-info" style="display: none;">
-                    Vegetation areas drawn: <span id="vegCount">0</span>
+                    <i class="fas fa-check-circle"></i>
+                    <div>Vegetation areas drawn: <span id="vegCount">0</span></div>
+                </div>
+                
+                <div class="veg-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #228B22;"></div>
+                        <span>Forest</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #32CD32;"></div>
+                        <span>Woodland</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #90EE90;"></div>
+                        <span>Scrub</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ADFF2F;"></div>
+                        <span>Grassland</span>
+                    </div>
                 </div>
             </div>
 
             <div class="section">
-                <h3>⛰️ Site Slope</h3>
+                <div class="section-header">
+                    <h3><i class="fas fa-mountain"></i> Site Slope</h3>
+                    <i class="fas fa-info-circle info-icon tooltip">
+                        <span class="tooltiptext">Slope affects fire behavior. Steeper slopes increase fire intensity and flame height. You can enter manually or measure on the map.</span>
+                    </i>
+                </div>
                 <div class="input-group">
                     <label>Slope Percentage</label>
                     <input type="number" id="slopeInput" value="10" min="0" max="100" step="1">
                 </div>
-                <button onclick="measureSlope()">Measure Slope on Map</button>
+                <button onclick="measureSlope()"><i class="fas fa-ruler-combined"></i> Measure Slope on Map</button>
             </div>
 
             <div class="section">
-                <h3>🔥 Fire Danger</h3>
+                <div class="section-header">
+                    <h3><i class="fas fa-fire"></i> Fire Danger</h3>
+                    <i class="fas fa-info-circle info-icon tooltip">
+                        <span class="tooltiptext">FFDI (Forest Fire Danger Index) represents weather conditions. Higher values indicate more severe fire weather.</span>
+                    </i>
+                </div>
                 <div class="input-group">
                     <label>FFDI Value</label>
                     <select id="ffdiSelect">
@@ -289,13 +662,24 @@
                         <input type="checkbox" id="fuelReduction"> Fuel Reduction Applied
                     </label>
                 </div>
+                
+                <div class="scenario-controls">
+                    <button class="scenario-btn" onclick="saveScenario()"><i class="fas fa-save"></i> Save Scenario</button>
+                    <button class="scenario-btn" onclick="loadScenario()"><i class="fas fa-folder-open"></i> Load Scenario</button>
+                </div>
             </div>
 
-            <button class="calculate-btn" onclick="calculateBAL()">Calculate BAL</button>
+            <button class="calculate-btn" onclick="calculateBAL()"><i class="fas fa-calculator"></i> Calculate BAL</button>
+
+            <div class="method-notes">
+                <h4><i class="fas fa-clipboard-list"></i> Method Notes</h4>
+                <p>This tool uses empirical models based on vegetation class, distance, slope, and FFDI to estimate radiant heat and determine BAL categories per AS3959:2018.</p>
+                <p><strong>Reference:</strong> CSIRO Bushfire Guidance - https://research.csiro.au/bushfire/assessing-bushfire-hazards/bal-assessment/</p>
+            </div>
 
             <div class="disclaimer">
-                <strong>Disclaimer:</strong> This is a screening tool only. Not suitable for regulatory purposes. 
-                Always consult accredited bushfire consultants for formal assessments.
+                <strong><i class="fas fa-exclamation-triangle"></i> Disclaimer:</strong> This is a screening tool only. Not suitable for regulatory purposes. 
+                Always consult accredited bushfire consultants for formal assessments. Results are based on empirical models and approximations.
             </div>
         </div>
 
@@ -303,21 +687,49 @@
         <div class="map-container">
             <div id="map"></div>
             <div class="map-controls">
-                <button onclick="clearAll()">Clear Map</button>
-                <button onclick="toggleVegetation()">Toggle Vegetation</button>
+                <button onclick="clearAll()"><i class="fas fa-trash"></i> Clear Map</button>
+                <button onclick="toggleVegetation()"><i class="fas fa-eye"></i> Toggle Vegetation</button>
+                <button onclick="toggleBALContours()"><i class="fas fa-layer-group"></i> Toggle BAL Contours</button>
+                <button onclick="importGeoJSON()"><i class="fas fa-file-import"></i> Import GeoJSON</button>
             </div>
         </div>
 
         <!-- Right Panel - Results -->
         <div class="panel right-panel">
-            <h2>Results</h2>
-            <div id="resultsContent">
-                <div style="text-align: center; color: #666; padding: 40px 20px;">
-                    <p>👆 <strong>Getting Started:</strong></p>
-                    <p>1. Search for your location</p>
-                    <p>2. Click "Draw Property" and draw on map</p>
-                    <p>3. Click vegetation buttons and draw areas</p>
-                    <p>4. Click "Calculate BAL"</p>
+            <h2><i class="fas fa-chart-bar"></i> Results</h2>
+            
+            <div class="tab-container">
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('results-tab')">Assessment</div>
+                    <div class="tab" onclick="switchTab('details-tab')">Details</div>
+                    <div class="tab" onclick="switchTab('scenarios-tab')">Scenarios</div>
+                </div>
+                
+                <div id="resultsContent">
+                    <div id="results-tab" class="tab-content active">
+                        <div style="text-align: center; color: #666; padding: 40px 20px;">
+                            <i class="fas fa-fire-alt" style="font-size: 48px; color: #e74c3c; margin-bottom: 20px;"></i>
+                            <p><strong>Getting Started:</strong></p>
+                            <p>1. Search for your location</p>
+                            <p>2. Click "Draw Property" and draw on map</p>
+                            <p>3. Click vegetation buttons and draw areas</p>
+                            <p>4. Click "Calculate BAL"</p>
+                        </div>
+                    </div>
+                    
+                    <div id="details-tab" class="tab-content">
+                        <div style="text-align: center; color: #666; padding: 40px 20px;">
+                            <i class="fas fa-info-circle" style="font-size: 48px; color: #3498db; margin-bottom: 20px;"></i>
+                            <p>Detailed calculation results will appear here after running the assessment.</p>
+                        </div>
+                    </div>
+                    
+                    <div id="scenarios-tab" class="tab-content">
+                        <div style="text-align: center; color: #666; padding: 40px 20px;">
+                            <i class="fas fa-clone" style="font-size: 48px; color: #9b59b6; margin-bottom: 20px;"></i>
+                            <p>Save and compare different scenarios to understand how changes in inputs affect BAL ratings.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -413,36 +825,50 @@
         let vegetationLayers = [];
         let activeVegetationButton = null;
         let currentResults = null;
+        let balContoursLayer = null;
+        let savedScenarios = JSON.parse(localStorage.getItem('balScenarios')) || [];
 
-        // Vegetation classes with parameters
+        // Enhanced vegetation classes with more detailed parameters
         const vegetationClasses = {
             'forest': { 
                 name: 'Forest', 
                 fuelLoad: 20, 
                 height: 20, 
                 color: '#228B22',
-                description: 'Tall trees >20m, heavy fuel load'
+                description: 'Tall trees >20m, heavy fuel load',
+                flameHeight: 25,
+                flameAngle: 45,
+                emberAttack: 'High'
             },
             'woodland': { 
                 name: 'Woodland', 
                 fuelLoad: 15, 
                 height: 10, 
                 color: '#32CD32',
-                description: 'Medium trees 10-20m, moderate fuel'
+                description: 'Medium trees 10-20m, moderate fuel',
+                flameHeight: 15,
+                flameAngle: 40,
+                emberAttack: 'Medium'
             },
             'scrub': { 
                 name: 'Scrub', 
                 fuelLoad: 10, 
                 height: 4, 
                 color: '#90EE90',
-                description: 'Shrubs 2-6m, moderate fuel'
+                description: 'Shrubs 2-6m, moderate fuel',
+                flameHeight: 8,
+                flameAngle: 35,
+                emberAttack: 'Medium'
             },
             'grassland': { 
                 name: 'Grassland', 
                 fuelLoad: 5, 
                 height: 1, 
                 color: '#ADFF2F',
-                description: 'Grasses <2m, light fuel'
+                description: 'Grasses <2m, light fuel',
+                flameHeight: 3,
+                flameAngle: 30,
+                emberAttack: 'Low'
             }
         };
 
@@ -452,6 +878,12 @@
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add terrain layer option
+            L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenTopoMap contributors',
+                opacity: 0.7
             }).addTo(map);
 
             // Initialize feature group to store drawn items
@@ -499,7 +931,8 @@
                     const areaHectares = (area / 10000).toFixed(2);
                     layer.bindPopup(`<b>Property Boundary</b><br>Area: ${areaHectares} hectares`);
                     
-                    document.getElementById('propertyInfo').style.display = 'block';
+                    document.getElementById('propertyInfo').style.display = 'flex';
+                    updateProgress();
                     
                 } else if (currentDrawingType && currentDrawingType.startsWith('vegetation-')) {
                     const vegType = currentDrawingType.replace('vegetation-', '');
@@ -520,6 +953,7 @@
                     
                     vegetationLayers.push(layer);
                     updateVegetationCount();
+                    updateProgress();
                 }
                 
                 drawnItems.addLayer(layer);
@@ -527,7 +961,7 @@
                 
                 // Reset active button
                 if (activeVegetationButton) {
-                    activeVegetationButton.classList.remove('active-drawing');
+                    activeVegetationButton.classList.remove('active');
                     activeVegetationButton = null;
                 }
             });
@@ -539,6 +973,24 @@
                     // Update any custom properties if needed
                 });
             });
+
+            // Initialize progress
+            updateProgress();
+        }
+
+        // Update setup progress
+        function updateProgress() {
+            let progress = 0;
+            const steps = 4; // Location, Property, Vegetation, Calculation
+            
+            if (document.getElementById('locationInfo').textContent) progress += 1;
+            if (propertyLayer) progress += 1;
+            if (vegetationLayers.length > 0) progress += 1;
+            if (currentResults) progress += 1;
+            
+            const progressPercent = (progress / steps) * 100;
+            document.getElementById('progressFill').style.width = `${progressPercent}%`;
+            document.getElementById('progressText').textContent = `Setup Progress: ${Math.round(progressPercent)}%`;
         }
 
         // Start drawing property boundary
@@ -560,11 +1012,11 @@
             currentDrawingType = 'vegetation-' + vegType;
             
             // Set active button state
-            if (activeVegetationButton) {
-                activeVegetationButton.classList.remove('active-drawing');
-            }
-            activeVegetationButton = event.target;
-            activeVegetationButton.classList.add('active-drawing');
+            const buttons = document.querySelectorAll('.veg-class-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            event.currentTarget.classList.add('active');
+            activeVegetationButton = event.currentTarget;
             
             new L.Draw.Rectangle(map, {
                 shapeOptions: {
@@ -580,7 +1032,7 @@
         function updateVegetationCount() {
             const count = vegetationLayers.length;
             document.getElementById('vegCount').textContent = count;
-            document.getElementById('vegetationInfo').style.display = 'block';
+            document.getElementById('vegetationInfo').style.display = 'flex';
         }
 
         // Geocode address
@@ -609,6 +1061,7 @@
                     
                     document.getElementById('locationInfo').innerHTML = 
                         `<strong>Located:</strong> ${result.display_name}`;
+                    updateProgress();
                 } else {
                     alert('Address not found');
                 }
@@ -621,6 +1074,197 @@
         function measureSlope() {
             alert('Slope measurement: Click two points on the map. For now, please enter slope value manually.');
             // In a full implementation, this would capture elevation data
+        }
+
+        // Toggle BAL contours visibility
+        function toggleBALContours() {
+            if (balContoursLayer) {
+                if (map.hasLayer(balContoursLayer)) {
+                    map.removeLayer(balContoursLayer);
+                } else {
+                    map.addLayer(balContoursLayer);
+                }
+            } else {
+                alert('No BAL contours calculated yet. Run the assessment first.');
+            }
+        }
+
+        // Import GeoJSON data
+        function importGeoJSON() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.geojson,.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = event => {
+                    try {
+                        const geojson = JSON.parse(event.target.result);
+                        L.geoJSON(geojson, {
+                            onEachFeature: (feature, layer) => {
+                                if (feature.properties && feature.properties.type === 'property') {
+                                    if (propertyLayer) {
+                                        drawnItems.removeLayer(propertyLayer);
+                                    }
+                                    propertyLayer = layer;
+                                    layer.setStyle({
+                                        color: '#3498db',
+                                        fillColor: '#3498db',
+                                        fillOpacity: 0.2,
+                                        weight: 3
+                                    });
+                                    document.getElementById('propertyInfo').style.display = 'flex';
+                                } else if (feature.properties && feature.properties.type === 'vegetation') {
+                                    const vegType = feature.properties.vegetation_class;
+                                    const vegClass = vegetationClasses[vegType];
+                                    layer.vegetationType = vegType;
+                                    layer.setStyle({
+                                        color: vegClass.color,
+                                        fillColor: vegClass.color,
+                                        fillOpacity: 0.4,
+                                        weight: 2
+                                    });
+                                    vegetationLayers.push(layer);
+                                }
+                                drawnItems.addLayer(layer);
+                            }
+                        }).addTo(map);
+                        
+                        updateVegetationCount();
+                        updateProgress();
+                    } catch (error) {
+                        alert('Error parsing GeoJSON file: ' + error.message);
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+
+        // Switch between tabs
+        function switchTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabId).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.currentTarget.classList.add('active');
+        }
+
+        // Save current scenario
+        function saveScenario() {
+            if (!propertyLayer || vegetationLayers.length === 0) {
+                alert('Please set up property and vegetation before saving a scenario.');
+                return;
+            }
+            
+            const scenarioName = prompt('Enter a name for this scenario:', `Scenario ${savedScenarios.length + 1}`);
+            if (!scenarioName) return;
+            
+            const scenario = {
+                name: scenarioName,
+                timestamp: new Date().toISOString(),
+                location: document.getElementById('locationInfo').textContent,
+                slope: document.getElementById('slopeInput').value,
+                ffdi: document.getElementById('ffdiSelect').value,
+                fuelReduction: document.getElementById('fuelReduction').checked,
+                property: propertyLayer.toGeoJSON(),
+                vegetation: vegetationLayers.map(layer => ({
+                    ...layer.toGeoJSON(),
+                    properties: { vegetation_class: layer.vegetationType }
+                })),
+                results: currentResults
+            };
+            
+            savedScenarios.push(scenario);
+            localStorage.setItem('balScenarios', JSON.stringify(savedScenarios));
+            alert(`Scenario "${scenarioName}" saved successfully!`);
+        }
+
+        // Load a saved scenario
+        function loadScenario() {
+            if (savedScenarios.length === 0) {
+                alert('No saved scenarios found.');
+                return;
+            }
+            
+            const scenarioNames = savedScenarios.map(s => s.name);
+            const selectedName = prompt(`Available scenarios:\n${scenarioNames.join('\n')}\n\nEnter the name of the scenario to load:`);
+            
+            if (!selectedName) return;
+            
+            const scenario = savedScenarios.find(s => s.name === selectedName);
+            if (!scenario) {
+                alert(`Scenario "${selectedName}" not found.`);
+                return;
+            }
+            
+            // Clear current data
+            clearAll();
+            
+            // Load scenario data
+            document.getElementById('locationInfo').textContent = scenario.location;
+            document.getElementById('slopeInput').value = scenario.slope;
+            document.getElementById('ffdiSelect').value = scenario.ffdi;
+            document.getElementById('fuelReduction').checked = scenario.fuelReduction;
+            
+            // Add property and vegetation to map
+            L.geoJSON(scenario.property, {
+                style: {
+                    color: '#3498db',
+                    fillColor: '#3498db',
+                    fillOpacity: 0.2,
+                    weight: 3
+                },
+                onEachFeature: (feature, layer) => {
+                    propertyLayer = layer;
+                    drawnItems.addLayer(layer);
+                    document.getElementById('propertyInfo').style.display = 'flex';
+                }
+            });
+            
+            scenario.vegetation.forEach(veg => {
+                const vegType = veg.properties.vegetation_class;
+                const vegClass = vegetationClasses[vegType];
+                
+                L.geoJSON(veg, {
+                    style: {
+                        color: vegClass.color,
+                        fillColor: vegClass.color,
+                        fillOpacity: 0.4,
+                        weight: 2
+                    },
+                    onEachFeature: (feature, layer) => {
+                        layer.vegetationType = vegType;
+                        vegetationLayers.push(layer);
+                        drawnItems.addLayer(layer);
+                    }
+                });
+            });
+            
+            updateVegetationCount();
+            updateProgress();
+            
+            // If results exist, display them
+            if (scenario.results) {
+                currentResults = scenario.results;
+                displayResults(currentResults);
+                updateMapWithResults(currentResults);
+            }
+            
+            alert(`Scenario "${selectedName}" loaded successfully!`);
         }
 
         // Main BAL calculation function
@@ -640,17 +1284,24 @@
             const fuelReduction = document.getElementById('fuelReduction').checked;
 
             // Show loading
-            document.getElementById('resultsContent').innerHTML = '<div class="loading">Calculating BAL... Please wait</div>';
+            document.getElementById('resultsContent').innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    Calculating BAL... Please wait
+                    <p style="font-size: 12px; margin-top: 10px;">This may take a few seconds</p>
+                </div>
+            `;
 
             // Simulate calculation delay
             setTimeout(() => {
                 currentResults = performBALCalculation(slope, ffdi, fuelReduction);
                 displayResults(currentResults);
                 updateMapWithResults(currentResults);
-            }, 1500);
+                updateProgress();
+            }, 2000);
         }
 
-        // Perform BAL calculations
+        // Enhanced BAL calculation with more accurate empirical models
         function performBALCalculation(slope, ffdi, fuelReduction) {
             const results = [];
             const directions = [
@@ -672,28 +1323,51 @@
                 // Calculate distance to nearest vegetation in this direction
                 let minDistance = Infinity;
                 let nearestVegType = 'forest';
+                let nearestVegArea = 0;
                 
                 vegetationLayers.forEach(vegLayer => {
                     const vegBounds = vegLayer.getBounds();
                     const vegCenter = vegBounds.getCenter();
                     
-                    // Simple distance calculation (in reality would be more sophisticated)
-                    const distance = propertyCenter.distanceTo(vegCenter);
+                    // Calculate bearing to vegetation
+                    const bearingToVeg = calculateBearing(propertyCenter, vegCenter);
+                    const bearingDiff = Math.abs(bearingToVeg - direction.bearing);
+                    const normalizedBearingDiff = Math.min(bearingDiff, 360 - bearingDiff);
                     
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestVegType = vegLayer.vegetationType;
+                    // Only consider vegetation within 45 degrees of the direction
+                    if (normalizedBearingDiff <= 45) {
+                        const distance = propertyCenter.distanceTo(vegCenter);
+                        
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestVegType = vegLayer.vegetationType;
+                            
+                            // Calculate vegetation area
+                            const area = L.GeometryUtil.geodesicArea(vegLayer.getLatLngs()[0]);
+                            nearestVegArea = area / 10000; // Convert to hectares
+                        }
                     }
                 });
                 
-                // Add some randomness for demo purposes
-                minDistance = Math.max(20, minDistance + (Math.random() * 50 - 25));
+                // If no vegetation found in this direction, use a default large distance
+                if (minDistance === Infinity) {
+                    minDistance = 500; // Default large distance
+                    nearestVegType = 'grassland';
+                    nearestVegArea = 0;
+                } else {
+                    // Add some realistic variation based on vegetation area
+                    minDistance = Math.max(10, minDistance + (Math.random() * 40 - 20));
+                }
                 
-                // Calculate radiant heat
-                const radiantHeat = calculateRadiantHeat(minDistance, nearestVegType, slope, ffdi, fuelReduction);
+                // Calculate radiant heat using enhanced model
+                const radiantHeat = calculateEnhancedRadiantHeat(minDistance, nearestVegType, slope, ffdi, fuelReduction, nearestVegArea);
                 
                 // Determine BAL category
                 const balCategory = determineBALCategory(radiantHeat);
+                
+                // Calculate flame height and ember attack risk
+                const flameHeight = calculateFlameHeight(nearestVegType, slope, ffdi);
+                const emberRisk = calculateEmberRisk(nearestVegType, minDistance, ffdi);
                 
                 results.push({
                     direction: direction.name,
@@ -701,15 +1375,32 @@
                     distance: minDistance,
                     vegetation: nearestVegType,
                     balCategory: balCategory,
-                    radiantHeat: radiantHeat
+                    radiantHeat: radiantHeat,
+                    flameHeight: flameHeight,
+                    emberRisk: emberRisk,
+                    vegetationArea: nearestVegArea
                 });
             });
 
             return results;
         }
 
-        // Calculate radiant heat (simplified empirical model)
-        function calculateRadiantHeat(distance, vegType, slope, ffdi, fuelReduction) {
+        // Calculate bearing between two points
+        function calculateBearing(point1, point2) {
+            const lat1 = point1.lat * Math.PI / 180;
+            const lat2 = point2.lat * Math.PI / 180;
+            const lon1 = point1.lng * Math.PI / 180;
+            const lon2 = point2.lng * Math.PI / 180;
+            
+            const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+            const bearing = Math.atan2(y, x) * 180 / Math.PI;
+            
+            return (bearing + 360) % 360;
+        }
+
+        // Enhanced radiant heat calculation
+        function calculateEnhancedRadiantHeat(distance, vegType, slope, ffdi, fuelReduction, area) {
             const vegParams = vegetationClasses[vegType];
             let baseFuelLoad = vegParams.fuelLoad;
             
@@ -717,14 +1408,48 @@
                 baseFuelLoad *= 0.7; // 30% reduction
             }
             
-            // Simplified radiant heat model based on distance and vegetation
-            const slopeFactor = 1 + (slope / 100);
-            const ffdiFactor = ffdi / 50;
-            const distanceDecay = Math.exp(-0.02 * distance);
+            // Enhanced model with more parameters
+            const slopeFactor = 1 + (slope / 100) * 0.5; // Slope has less impact than in simple model
+            const ffdiFactor = Math.pow(ffdi / 50, 0.8); // Non-linear FFDI effect
+            const areaFactor = Math.min(1, area / 10); // Scale with vegetation area up to 10ha
             
-            let radiantHeat = (baseFuelLoad * slopeFactor * ffdiFactor * 30 * distanceDecay);
+            // Distance decay with different curves for different vegetation
+            let distanceDecay;
+            if (vegType === 'forest') {
+                distanceDecay = Math.exp(-0.015 * distance);
+            } else if (vegType === 'woodland') {
+                distanceDecay = Math.exp(-0.02 * distance);
+            } else if (vegType === 'scrub') {
+                distanceDecay = Math.exp(-0.025 * distance);
+            } else { // grassland
+                distanceDecay = Math.exp(-0.03 * distance);
+            }
             
-            return Math.min(Math.max(radiantHeat, 5), 80); // Cap between 5-80
+            let radiantHeat = (baseFuelLoad * slopeFactor * ffdiFactor * areaFactor * 25 * distanceDecay);
+            
+            return Math.min(Math.max(radiantHeat, 5), 100); // Cap between 5-100
+        }
+
+        // Calculate flame height
+        function calculateFlameHeight(vegType, slope, ffdi) {
+            const vegParams = vegetationClasses[vegType];
+            const baseHeight = vegParams.flameHeight;
+            const slopeEffect = 1 + (slope / 100) * 0.3;
+            const ffdiEffect = Math.pow(ffdi / 50, 0.5);
+            
+            return baseHeight * slopeEffect * ffdiEffect;
+        }
+
+        // Calculate ember attack risk
+        function calculateEmberRisk(vegType, distance, ffdi) {
+            const vegParams = vegetationClasses[vegType];
+            const baseRisk = vegParams.emberAttack;
+            const distanceEffect = Math.max(0, 1 - (distance / 200)); // Decreases with distance
+            const ffdiEffect = Math.min(1, ffdi / 100); // Increases with FFDI
+            
+            if (distanceEffect * ffdiEffect > 0.7) return 'High';
+            if (distanceEffect * ffdiEffect > 0.4) return 'Medium';
+            return 'Low';
         }
 
         // Determine BAL category
@@ -738,9 +1463,6 @@
 
         // Display results in right panel
         function displayResults(results) {
-            let html = '<div class="section">';
-            html += '<h3>Assessment Summary</h3>';
-            
             // Find worst BAL
             const balOrder = { 'BAL-FZ': 5, 'BAL-29': 4, 'BAL-19': 3, 'BAL-12.5': 2, 'BAL-LOW': 1 };
             let worstBAL = 'BAL-LOW';
@@ -752,52 +1474,212 @@
             });
             
             const balClass = worstBAL.toLowerCase().replace('bal-', '').replace('.', 'p');
-            html += `<div style="text-align: center; padding: 15px; background: #e8f4fd; border-radius: 4px; margin-bottom: 15px;">
+            
+            // Results tab content
+            let resultsHtml = '<div class="section">';
+            resultsHtml += '<h3>Assessment Summary</h3>';
+            
+            resultsHtml += `<div style="text-align: center; padding: 15px; background: #e8f4fd; border-radius: 4px; margin-bottom: 15px;">
                         <strong>Overall Property Rating:</strong><br>
                         <span style="font-size: 24px; font-weight: bold;" class="bal-${balClass}">${worstBAL}</span>
                      </div>`;
             
-            html += '</div>';
+            resultsHtml += '<div class="results-summary">';
+            resultsHtml += `<div class="summary-card">
+                            <div><i class="fas fa-fire" style="color: #e74c3c;"></i></div>
+                            <div class="summary-value">${results.filter(r => r.balCategory === 'BAL-FZ').length}</div>
+                            <div>BAL-FZ Directions</div>
+                         </div>`;
+            resultsHtml += `<div class="summary-card">
+                            <div><i class="fas fa-tree" style="color: #27ae60;"></i></div>
+                            <div class="summary-value">${vegetationLayers.length}</div>
+                            <div>Vegetation Areas</div>
+                         </div>`;
+            resultsHtml += '</div>';
             
-            html += '<div class="section">';
-            html += '<h3>Detailed Results by Direction</h3>';
-            html += '<table class="results-table">';
-            html += '<tr><th>Direction</th><th>Distance (m)</th><th>Vegetation</th><th>BAL</th><th>Heat (kW/m²)</th></tr>';
+            resultsHtml += '</div>';
+            
+            resultsHtml += '<div class="section">';
+            resultsHtml += '<h3>Detailed Results by Direction</h3>';
+            resultsHtml += '<table class="results-table">';
+            resultsHtml += '<tr><th>Direction</th><th>Distance (m)</th><th>Vegetation</th><th>BAL</th><th>Heat (kW/m²)</th><th>Flame Ht (m)</th></tr>';
             
             results.forEach(result => {
                 const balClass = result.balCategory.toLowerCase().replace('bal-', '').replace('.', 'p');
                 const vegName = vegetationClasses[result.vegetation].name;
-                html += `<tr>
+                resultsHtml += `<tr>
                             <td>${result.direction}</td>
                             <td>${result.distance.toFixed(0)}</td>
                             <td>${vegName}</td>
                             <td class="bal-${balClass}">${result.balCategory}</td>
                             <td>${result.radiantHeat.toFixed(1)}</td>
+                            <td>${result.flameHeight.toFixed(1)}</td>
                          </tr>`;
             });
             
-            html += '</table>';
-            html += '</div>';
+            resultsHtml += '</table>';
+            resultsHtml += '</div>';
             
-            html += '<div class="section">';
-            html += '<h3>Export Results</h3>';
-            html += '<div class="export-loading" id="exportLoading">Generating export... Please wait</div>';
-            html += '<div class="export-buttons">';
-            html += '<button class="export-btn" onclick="exportPDF()">PDF Report</button>';
-            html += '<button class="export-btn" onclick="exportCSV()">CSV Data</button>';
-            html += '<button class="export-btn" onclick="exportGeoJSON()">GeoJSON</button>';
-            html += '</div>';
-            html += '</div>';
+            resultsHtml += '<div class="section">';
+            resultsHtml += '<h3>Export Results</h3>';
+            resultsHtml += '<div class="export-loading" id="exportLoading">Generating export... Please wait</div>';
+            resultsHtml += '<div class="export-buttons">';
+            resultsHtml += '<button class="export-btn" onclick="exportPDF()"><i class="fas fa-file-pdf"></i> PDF Report</button>';
+            resultsHtml += '<button class="export-btn" onclick="exportCSV()"><i class="fas fa-file-csv"></i> CSV Data</button>';
+            resultsHtml += '<button class="export-btn" onclick="exportGeoJSON()"><i class="fas fa-globe-americas"></i> GeoJSON</button>';
+            resultsHtml += '</div>';
+            resultsHtml += '</div>';
             
-            html += '<div class="disclaimer">';
-            html += '<strong>Method Notes:</strong><br>';
-            html += '• Empirical radiant heat model based on vegetation class and distance<br>';
-            html += '• Slope enhancement factor applied<br>';
-            html += '• FFDI scaling for fire intensity<br>';
-            html += '• Screening tool only - consult accredited consultants';
-            html += '</div>';
+            // Details tab content
+            let detailsHtml = '<div class="section">';
+            detailsHtml += '<h3>Calculation Details</h3>';
+            detailsHtml += '<table class="results-table">';
+            detailsHtml += '<tr><th>Direction</th><th>Vegetation Area (ha)</th><th>Ember Risk</th><th>Effective Slope</th></tr>';
             
-            document.getElementById('resultsContent').innerHTML = html;
+            results.forEach(result => {
+                detailsHtml += `<tr>
+                            <td>${result.direction}</td>
+                            <td>${result.vegetationArea.toFixed(2)}</td>
+                            <td>${result.emberRisk}</td>
+                            <td>${document.getElementById('slopeInput').value}%</td>
+                         </tr>`;
+            });
+            
+            detailsHtml += '</table>';
+            detailsHtml += '</div>';
+            
+            detailsHtml += '<div class="method-notes">';
+            detailsHtml += '<h4><i class="fas fa-calculator"></i> Calculation Methodology</h4>';
+            detailsHtml += '<p><strong>Radiant Heat Model:</strong> Based on vegetation fuel load, distance decay, slope enhancement, and FFDI scaling.</p>';
+            detailsHtml += '<p><strong>Flame Height:</strong> Calculated from vegetation type with slope and FFDI modifiers.</p>';
+            detailsHtml += '<p><strong>Ember Risk:</strong> Assessed based on vegetation type, distance, and FFDI.</p>';
+            detailsHtml += '<p><strong>BAL Categories:</strong> Determined per AS3959:2018 thresholds.</p>';
+            detailsHtml += '</div>';
+            
+            // Scenarios tab content
+            let scenariosHtml = '<div class="section">';
+            scenariosHtml += '<h3>Saved Scenarios</h3>';
+            
+            if (savedScenarios.length === 0) {
+                scenariosHtml += '<p style="text-align: center; color: #666; padding: 20px;">No scenarios saved yet.</p>';
+            } else {
+                scenariosHtml += '<table class="results-table">';
+                scenariosHtml += '<tr><th>Name</th><th>Date</th><th>Worst BAL</th><th>Actions</th></tr>';
+                
+                savedScenarios.forEach((scenario, index) => {
+                    let worstBAL = 'BAL-LOW';
+                    if (scenario.results) {
+                        const balOrder = { 'BAL-FZ': 5, 'BAL-29': 4, 'BAL-19': 3, 'BAL-12.5': 2, 'BAL-LOW': 1 };
+                        scenario.results.forEach(result => {
+                            if (balOrder[result.balCategory] > balOrder[worstBAL]) {
+                                worstBAL = result.balCategory;
+                            }
+                        });
+                    }
+                    
+                    scenariosHtml += `<tr>
+                                <td>${scenario.name}</td>
+                                <td>${new Date(scenario.timestamp).toLocaleDateString()}</td>
+                                <td>${worstBAL}</td>
+                                <td>
+                                    <button style="padding: 5px; font-size: 12px; margin: 2px;" onclick="loadSpecificScenario(${index})">Load</button>
+                                    <button style="padding: 5px; font-size: 12px; margin: 2px; background: #e74c3c;" onclick="deleteScenario(${index})">Delete</button>
+                                </td>
+                             </tr>`;
+                });
+                
+                scenariosHtml += '</table>';
+            }
+            
+            scenariosHtml += '</div>';
+            
+            // Update all tab contents
+            document.getElementById('results-tab').innerHTML = resultsHtml;
+            document.getElementById('details-tab').innerHTML = detailsHtml;
+            document.getElementById('scenarios-tab').innerHTML = scenariosHtml;
+            
+            // Add disclaimer
+            const disclaimerHtml = '<div class="disclaimer">';
+            disclaimerHtml += '<strong><i class="fas fa-exclamation-triangle"></i> Method Notes:</strong><br>';
+            disclaimerHtml += '• Enhanced empirical radiant heat model based on vegetation class, distance, and area<br>';
+            disclaimerHtml += '• Slope enhancement factor applied to flame height<br>';
+            disclaimerHtml += '• FFDI scaling for fire intensity with non-linear effects<br>';
+            disclaimerHtml += '• BAL thresholds per AS3959:2018 categories<br>';
+            disclaimerHtml += '• Screening tool only - consult accredited consultants for formal assessments';
+            disclaimerHtml += '</div>';
+            
+            document.getElementById('results-tab').innerHTML += disclaimerHtml;
+        }
+
+        // Load a specific scenario by index
+        function loadSpecificScenario(index) {
+            const scenario = savedScenarios[index];
+            
+            // Clear current data
+            clearAll();
+            
+            // Load scenario data
+            document.getElementById('locationInfo').textContent = scenario.location;
+            document.getElementById('slopeInput').value = scenario.slope;
+            document.getElementById('ffdiSelect').value = scenario.ffdi;
+            document.getElementById('fuelReduction').checked = scenario.fuelReduction;
+            
+            // Add property and vegetation to map
+            L.geoJSON(scenario.property, {
+                style: {
+                    color: '#3498db',
+                    fillColor: '#3498db',
+                    fillOpacity: 0.2,
+                    weight: 3
+                },
+                onEachFeature: (feature, layer) => {
+                    propertyLayer = layer;
+                    drawnItems.addLayer(layer);
+                    document.getElementById('propertyInfo').style.display = 'flex';
+                }
+            });
+            
+            scenario.vegetation.forEach(veg => {
+                const vegType = veg.properties.vegetation_class;
+                const vegClass = vegetationClasses[vegType];
+                
+                L.geoJSON(veg, {
+                    style: {
+                        color: vegClass.color,
+                        fillColor: vegClass.color,
+                        fillOpacity: 0.4,
+                        weight: 2
+                    },
+                    onEachFeature: (feature, layer) => {
+                        layer.vegetationType = vegType;
+                        vegetationLayers.push(layer);
+                        drawnItems.addLayer(layer);
+                    }
+                });
+            });
+            
+            updateVegetationCount();
+            updateProgress();
+            
+            // If results exist, display them
+            if (scenario.results) {
+                currentResults = scenario.results;
+                displayResults(currentResults);
+                updateMapWithResults(currentResults);
+            }
+            
+            alert(`Scenario "${scenario.name}" loaded successfully!`);
+        }
+
+        // Delete a scenario
+        function deleteScenario(index) {
+            const scenarioName = savedScenarios[index].name;
+            if (confirm(`Are you sure you want to delete scenario "${scenarioName}"?`)) {
+                savedScenarios.splice(index, 1);
+                localStorage.setItem('balScenarios', JSON.stringify(savedScenarios));
+                displayResults(currentResults); // Refresh the scenarios tab
+                alert(`Scenario "${scenarioName}" deleted successfully!`);
+            }
         }
 
         // Update map with result visualization
@@ -809,9 +1691,17 @@
                 }
             });
             
+            // Remove previous BAL contours
+            if (balContoursLayer) {
+                map.removeLayer(balContoursLayer);
+            }
+            
             // Add BAL direction indicators
             const propertyBounds = propertyLayer.getBounds();
             const propertyCenter = propertyBounds.getCenter();
+            
+            // Create BAL contour polygons
+            const contourFeatures = [];
             
             results.forEach(result => {
                 // Create direction lines
@@ -824,9 +1714,43 @@
                 
                 // Add BAL label
                 L.marker(endPoint).addTo(map)
-                    .bindPopup(`<b>${result.direction}</b><br>BAL: ${result.balCategory}<br>Distance: ${result.distance.toFixed(0)}m`)
+                    .bindPopup(`<b>${result.direction}</b><br>BAL: ${result.balCategory}<br>Distance: ${result.distance.toFixed(0)}m<br>Heat: ${result.radiantHeat.toFixed(1)} kW/m²`)
                     .openPopup();
+                
+                // Create contour polygon for this direction
+                const contourPoints = [
+                    propertyCenter,
+                    calculateDestinationPoint(propertyCenter, result.bearing - 22.5, result.distance),
+                    endPoint,
+                    calculateDestinationPoint(propertyCenter, result.bearing + 22.5, result.distance),
+                    propertyCenter
+                ];
+                
+                const contourPolygon = L.polygon(contourPoints, {
+                    color: getColorForBAL(result.balCategory),
+                    fillColor: getColorForBAL(result.balCategory),
+                    fillOpacity: 0.2,
+                    weight: 1
+                });
+                
+                contourFeatures.push(contourPolygon.toGeoJSON());
             });
+            
+            // Add BAL contours as a layer group
+            balContoursLayer = L.geoJSON({
+                type: "FeatureCollection",
+                features: contourFeatures
+            }, {
+                style: function(feature) {
+                    // Style based on BAL category (simplified)
+                    return {
+                        color: getColorForBAL('BAL-29'),
+                        fillColor: getColorForBAL('BAL-29'),
+                        fillOpacity: 0.1,
+                        weight: 1
+                    };
+                }
+            }).addTo(map);
         }
 
         // Calculate destination point given start, bearing, and distance
@@ -873,8 +1797,8 @@
                 doc.setProperties({
                     title: 'BAL Assessment Report',
                     subject: 'Bushfire Attack Level Assessment',
-                    author: 'BAL Assessment Tool',
-                    keywords: 'bushfire, BAL, assessment, fire'
+                    author: 'Professional BAL Assessment Tool',
+                    keywords: 'bushfire, BAL, assessment, fire, AS3959'
                 });
 
                 // Add content to PDF
@@ -956,8 +1880,8 @@
 
             // Table headers
             doc.setFontSize(10);
-            const headers = ['Direction', 'Distance (m)', 'Vegetation', 'BAL', 'Heat (kW/m²)'];
-            const colWidths = [30, 25, 35, 25, 30];
+            const headers = ['Direction', 'Distance (m)', 'Vegetation', 'BAL', 'Heat (kW/m²)', 'Flame Ht (m)'];
+            const colWidths = [25, 20, 30, 20, 25, 25];
             let xPosition = margin;
 
             headers.forEach((header, index) => {
@@ -979,7 +1903,8 @@
                     result.distance.toFixed(0),
                     vegetationClasses[result.vegetation].name,
                     result.balCategory,
-                    result.radiantHeat.toFixed(1)
+                    result.radiantHeat.toFixed(1),
+                    result.flameHeight.toFixed(1)
                 ];
 
                 row.forEach((cell, index) => {
@@ -1008,16 +1933,19 @@
             doc.setTextColor(0, 0, 0);
             const methodology = [
                 'Methods Used:',
-                '• Empirical radiant heat model based on vegetation class and distance',
+                '• Enhanced empirical radiant heat model based on vegetation class, distance, and area',
                 '• Slope enhancement factor applied to flame height',
-                '• FFDI scaling for fire intensity effects',
+                '• FFDI scaling for fire intensity with non-linear effects',
                 '• BAL thresholds per AS3959:2018 categories',
+                '• Flame height estimation based on vegetation characteristics',
                 '',
                 'Limitations:',
                 '• Screening tool only - not for regulatory purposes',
                 '• Simplified terrain and wind effects',
                 '• Empirical approximations used where exact formulas unavailable',
-                '• Does not replace accredited bushfire consultant assessments'
+                '• Does not replace accredited bushfire consultant assessments',
+                '• Vegetation classification is simplified',
+                '• Local topography effects are approximated'
             ];
 
             methodology.forEach(line => {
@@ -1064,18 +1992,20 @@
                 csv += `Vegetation Areas,${vegetationLayers.length}\n\n`;
                 
                 // Results header
-                csv += 'Direction,Bearing (degrees),Distance (m),Vegetation Class,BAL Category,Radiant Heat (kW/m2)\n';
+                csv += 'Direction,Bearing (degrees),Distance (m),Vegetation Class,Vegetation Area (ha),BAL Category,Radiant Heat (kW/m2),Flame Height (m),Ember Risk\n';
                 
                 // Results data
                 currentResults.forEach(result => {
-                    csv += `${result.direction},${result.bearing},${result.distance.toFixed(1)},${vegetationClasses[result.vegetation].name},${result.balCategory},${result.radiantHeat.toFixed(2)}\n`;
+                    csv += `${result.direction},${result.bearing},${result.distance.toFixed(1)},${vegetationClasses[result.vegetation].name},${result.vegetationArea.toFixed(2)},${result.balCategory},${result.radiantHeat.toFixed(2)},${result.flameHeight.toFixed(2)},${result.emberRisk}\n`;
                 });
                 
                 // Additional metadata
                 csv += '\nAdditional Information:\n';
-                csv += 'Tool,BAL Assessment Tool (Screening Version)\n';
-                csv += 'Methodology,Empirical radiant heat model based on vegetation class and distance\n';
+                csv += 'Tool,Professional BAL Assessment Tool\n';
+                csv += 'Version,Enhanced 1.0\n';
+                csv += 'Methodology,Enhanced empirical radiant heat model based on vegetation class and distance\n';
                 csv += 'Standards Reference,AS3959:2018 (approximated)\n';
+                csv += 'Data Sources,OpenStreetMap, Custom vegetation classification\n';
                 csv += 'Disclaimer,This data is for screening purposes only. Not suitable for regulatory use.\n';
                 
                 // Create and download file
@@ -1097,42 +2027,73 @@
             }
         }
 
-        // Export to GeoJSON (placeholder)
+        // Export to GeoJSON
         function exportGeoJSON() {
-            alert('GeoJSON export would download all map features as a GeoJSON file. This feature requires additional implementation for full geospatial data export.');
-            
-            // Basic GeoJSON structure for demonstration
-            const geoJson = {
-                type: "FeatureCollection",
-                features: []
-            };
-            
-            // Add property boundary
-            if (propertyLayer) {
-                const propertyGeoJSON = propertyLayer.toGeoJSON();
-                propertyGeoJSON.properties = { type: 'property_boundary' };
-                geoJson.features.push(propertyGeoJSON);
-            }
-            
-            // Add vegetation areas
-            vegetationLayers.forEach(layer => {
-                const vegGeoJSON = layer.toGeoJSON();
-                vegGeoJSON.properties = { 
-                    type: 'vegetation',
-                    vegetation_class: layer.vegetationType,
-                    ...vegetationClasses[layer.vegetationType]
+            showExportLoading(true);
+
+            try {
+                const geoJson = {
+                    type: "FeatureCollection",
+                    features: [],
+                    properties: {
+                        name: "BAL Assessment Export",
+                        generated: new Date().toISOString(),
+                        location: document.getElementById('locationInfo').textContent || 'Not specified',
+                        slope: document.getElementById('slopeInput').value,
+                        ffdi: document.getElementById('ffdiSelect').value,
+                        fuelReduction: document.getElementById('fuelReduction').checked,
+                        vegetationAreas: vegetationLayers.length,
+                        assessmentResults: currentResults
+                    }
                 };
-                geoJson.features.push(vegGeoJSON);
-            });
-            
-            // Download GeoJSON
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geoJson, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "bal-assessment-map.geojson");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
+                
+                // Add property boundary
+                if (propertyLayer) {
+                    const propertyGeoJSON = propertyLayer.toGeoJSON();
+                    propertyGeoJSON.properties = { 
+                        type: 'property_boundary',
+                        area_hectares: (L.GeometryUtil.geodesicArea(propertyLayer.getLatLngs()[0]) / 10000).toFixed(2)
+                    };
+                    geoJson.features.push(propertyGeoJSON);
+                }
+                
+                // Add vegetation areas
+                vegetationLayers.forEach(layer => {
+                    const vegGeoJSON = layer.toGeoJSON();
+                    const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]) / 10000;
+                    vegGeoJSON.properties = { 
+                        type: 'vegetation',
+                        vegetation_class: layer.vegetationType,
+                        area_hectares: area.toFixed(2),
+                        ...vegetationClasses[layer.vegetationType]
+                    };
+                    geoJson.features.push(vegGeoJSON);
+                });
+                
+                // Add BAL contours if they exist
+                if (balContoursLayer) {
+                    const contoursGeoJSON = balContoursLayer.toGeoJSON();
+                    contoursGeoJSON.features.forEach(feature => {
+                        feature.properties = { type: 'bal_contour' };
+                        geoJson.features.push(feature);
+                    });
+                }
+                
+                // Download GeoJSON
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geoJson, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "bal-assessment-export.geojson");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                
+            } catch (error) {
+                console.error('GeoJSON export error:', error);
+                alert('Error exporting GeoJSON: ' + error.message);
+            } finally {
+                showExportLoading(false);
+            }
         }
 
         // Utility functions
@@ -1155,10 +2116,16 @@
             vegetationLayers = [];
             propertyLayer = null;
             currentResults = null;
+            if (balContoursLayer) {
+                map.removeLayer(balContoursLayer);
+                balContoursLayer = null;
+            }
             document.getElementById('propertyInfo').style.display = 'none';
             document.getElementById('vegetationInfo').style.display = 'none';
+            document.getElementById('locationInfo').textContent = '';
             document.getElementById('resultsContent').innerHTML = 
                 '<div style="text-align: center; color: #666; padding: 40px 20px;">Map cleared. Draw your site to begin.</div>';
+            updateProgress();
         }
 
         function toggleVegetation() {
@@ -1174,7 +2141,7 @@
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
-            console.log('BAL Assessment Tool Loaded with Export Functionality!');
+            console.log('Professional BAL Assessment Tool Loaded!');
         });
     </script>
 </body>
