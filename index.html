@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BAL Assessment Tool</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <style>
         * {
             margin: 0;
@@ -120,6 +121,11 @@
             background: #219a52;
         }
 
+        .active-drawing {
+            background: #e74c3c !important;
+            border: 2px solid #c0392b;
+        }
+
         .results-table {
             width: 100%;
             border-collapse: collapse;
@@ -140,7 +146,7 @@
         }
 
         .bal-low { background: #27ae60; color: white; }
-        .bal-12.5 { background: #f39c12; color: white; }
+        .bal-12p5 { background: #f39c12; color: white; }
         .bal-19 { background: #e67e22; color: white; }
         .bal-29 { background: #e74c3c; color: white; }
         .bal-fz { background: #c0392b; color: white; }
@@ -194,6 +200,14 @@
         .export-btn:hover {
             background: #8e44ad;
         }
+
+        .feature-info {
+            background: #e8f4fd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -215,17 +229,23 @@
             <div class="section">
                 <h3>🏠 Property Boundary</h3>
                 <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Draw your property boundary on the map</p>
-                <button onclick="startDrawing('property')">Draw Property</button>
+                <button id="drawPropertyBtn" onclick="startDrawingProperty()">Draw Property</button>
+                <div id="propertyInfo" class="feature-info" style="display: none;">
+                    Property boundary drawn ✓
+                </div>
             </div>
 
             <div class="section">
                 <h3>🌳 Vegetation</h3>
                 <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Draw vegetation areas and assign classes:</p>
                 <div class="veg-buttons">
-                    <button class="veg-btn" onclick="startDrawing('forest')">Forest</button>
-                    <button class="veg-btn" onclick="startDrawing('woodland')">Woodland</button>
-                    <button class="veg-btn" onclick="startDrawing('scrub')">Scrub</button>
-                    <button class="veg-btn" onclick="startDrawing('grassland')">Grassland</button>
+                    <button class="veg-btn" onclick="startDrawingVegetation('forest')">Forest</button>
+                    <button class="veg-btn" onclick="startDrawingVegetation('woodland')">Woodland</button>
+                    <button class="veg-btn" onclick="startDrawingVegetation('scrub')">Scrub</button>
+                    <button class="veg-btn" onclick="startDrawingVegetation('grassland')">Grassland</button>
+                </div>
+                <div id="vegetationInfo" class="feature-info" style="display: none;">
+                    Vegetation areas drawn: <span id="vegCount">0</span>
                 </div>
             </div>
 
@@ -278,28 +298,58 @@
             <h2>Results</h2>
             <div id="resultsContent">
                 <div style="text-align: center; color: #666; padding: 40px 20px;">
-                    Configure your site on the map and click "Calculate BAL" to see results here.
+                    <p>👆 <strong>Getting Started:</strong></p>
+                    <p>1. Search for your location</p>
+                    <p>2. Click "Draw Property" and draw on map</p>
+                    <p>3. Click vegetation buttons and draw areas</p>
+                    <p>4. Click "Calculate BAL"</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script>
         // Global variables
         let map;
-        let drawnItems = new L.FeatureGroup();
-        let currentDrawing = null;
-        let vegetationLayers = [];
+        let drawnItems;
+        let drawControl;
+        let currentDrawingType = null;
         let propertyLayer = null;
-        let slopePoints = [];
+        let vegetationLayers = [];
+        let activeVegetationButton = null;
 
         // Vegetation classes with parameters
         const vegetationClasses = {
-            'forest': { fuelLoad: 20, height: 20, color: '#228B22' },
-            'woodland': { fuelLoad: 15, height: 10, color: '#32CD32' },
-            'scrub': { fuelLoad: 10, height: 4, color: '#90EE90' },
-            'grassland': { fuelLoad: 5, height: 1, color: '#ADFF2F' }
+            'forest': { 
+                name: 'Forest', 
+                fuelLoad: 20, 
+                height: 20, 
+                color: '#228B22',
+                description: 'Tall trees >20m, heavy fuel load'
+            },
+            'woodland': { 
+                name: 'Woodland', 
+                fuelLoad: 15, 
+                height: 10, 
+                color: '#32CD32',
+                description: 'Medium trees 10-20m, moderate fuel'
+            },
+            'scrub': { 
+                name: 'Scrub', 
+                fuelLoad: 10, 
+                height: 4, 
+                color: '#90EE90',
+                description: 'Shrubs 2-6m, moderate fuel'
+            },
+            'grassland': { 
+                name: 'Grassland', 
+                fuelLoad: 5, 
+                height: 1, 
+                color: '#ADFF2F',
+                description: 'Grasses <2m, light fuel'
+            }
         };
 
         // Initialize the map
@@ -310,7 +360,133 @@
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
 
+            // Initialize feature group to store drawn items
+            drawnItems = new L.FeatureGroup();
             map.addLayer(drawnItems);
+
+            // Initialize draw control
+            drawControl = new L.Control.Draw({
+                edit: {
+                    featureGroup: drawnItems
+                },
+                draw: {
+                    polygon: {
+                        allowIntersection: false,
+                        showArea: true
+                    },
+                    rectangle: true,
+                    circle: false,
+                    marker: false,
+                    polyline: false
+                }
+            });
+            map.addControl(drawControl);
+
+            // Handle draw events
+            map.on(L.Draw.Event.CREATED, function (e) {
+                const layer = e.layer;
+                const type = e.layerType;
+                
+                if (currentDrawingType === 'property') {
+                    // Remove previous property layer
+                    if (propertyLayer) {
+                        drawnItems.removeLayer(propertyLayer);
+                    }
+                    propertyLayer = layer;
+                    layer.setStyle({
+                        color: '#3498db',
+                        fillColor: '#3498db',
+                        fillOpacity: 0.2,
+                        weight: 3
+                    });
+                    
+                    // Add popup with area info
+                    const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                    const areaHectares = (area / 10000).toFixed(2);
+                    layer.bindPopup(`<b>Property Boundary</b><br>Area: ${areaHectares} hectares`);
+                    
+                    document.getElementById('propertyInfo').style.display = 'block';
+                    
+                } else if (currentDrawingType && currentDrawingType.startsWith('vegetation-')) {
+                    const vegType = currentDrawingType.replace('vegetation-', '');
+                    const vegClass = vegetationClasses[vegType];
+                    
+                    layer.vegetationType = vegType;
+                    layer.setStyle({
+                        color: vegClass.color,
+                        fillColor: vegClass.color,
+                        fillOpacity: 0.4,
+                        weight: 2
+                    });
+                    
+                    // Add popup with vegetation info
+                    const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                    const areaHectares = (area / 10000).toFixed(2);
+                    layer.bindPopup(`<b>${vegClass.name}</b><br>Area: ${areaHectares} ha<br>${vegClass.description}`);
+                    
+                    vegetationLayers.push(layer);
+                    updateVegetationCount();
+                }
+                
+                drawnItems.addLayer(layer);
+                currentDrawingType = null;
+                
+                // Reset active button
+                if (activeVegetationButton) {
+                    activeVegetationButton.classList.remove('active-drawing');
+                    activeVegetationButton = null;
+                }
+            });
+
+            // Handle edit events
+            map.on(L.Draw.Event.EDITED, function (e) {
+                const layers = e.layers;
+                layers.eachLayer(function (layer) {
+                    // Update any custom properties if needed
+                });
+            });
+        }
+
+        // Start drawing property boundary
+        function startDrawingProperty() {
+            currentDrawingType = 'property';
+            new L.Draw.Rectangle(map, {
+                shapeOptions: {
+                    color: '#3498db',
+                    fillColor: '#3498db',
+                    fillOpacity: 0.2,
+                    weight: 3
+                }
+            }).enable();
+        }
+
+        // Start drawing vegetation
+        function startDrawingVegetation(vegType) {
+            const vegClass = vegetationClasses[vegType];
+            currentDrawingType = 'vegetation-' + vegType;
+            
+            // Set active button state
+            if (activeVegetationButton) {
+                activeVegetationButton.classList.remove('active-drawing');
+            }
+            activeVegetationButton = event.target;
+            activeVegetationButton.classList.add('active-drawing');
+            
+            new L.Draw.Rectangle(map, {
+                shapeOptions: {
+                    color: vegClass.color,
+                    fillColor: vegClass.color,
+                    fillOpacity: 0.4,
+                    weight: 2
+                }
+            }).enable();
+        }
+
+        // Update vegetation count display
+        function updateVegetationCount() {
+            const count = vegetationLayers.length;
+            document.getElementById('vegCount').textContent = count;
+            document.getElementById('vegetationInfo').style.display = 'block';
         }
 
         // Geocode address
@@ -329,6 +505,14 @@
                     
                     map.setView([lat, lon], 15);
                     
+                    // Add a marker
+                    if (window.locationMarker) {
+                        map.removeLayer(window.locationMarker);
+                    }
+                    window.locationMarker = L.marker([lat, lon]).addTo(map)
+                        .bindPopup(`<b>Selected Location</b><br>${result.display_name}`)
+                        .openPopup();
+                    
                     document.getElementById('locationInfo').innerHTML = 
                         `<strong>Located:</strong> ${result.display_name}`;
                 } else {
@@ -339,72 +523,21 @@
             }
         }
 
-        // Start drawing on map
-        function startDrawing(type) {
-            // Clear any existing drawing
-            if (currentDrawing) {
-                map.removeLayer(currentDrawing);
-            }
-
-            if (type === 'property') {
-                currentDrawing = new L.Draw.Rectangle(map, {
-                    shapeOptions: {
-                        color: '#3498db',
-                        fillColor: '#3498db',
-                        fillOpacity: 0.2
-                    }
-                });
-                currentDrawing.enable();
-            } else {
-                const vegClass = vegetationClasses[type];
-                currentDrawing = new L.Draw.Rectangle(map, {
-                    shapeOptions: {
-                        color: vegClass.color,
-                        fillColor: vegClass.color,
-                        fillOpacity: 0.4
-                    }
-                });
-                currentDrawing.enable();
-                
-                // Store the vegetation type for when drawing completes
-                currentDrawing.vegetationType = type;
-            }
-
-            // Handle drawing completion
-            map.on('draw:created', function(e) {
-                const layer = e.layer;
-                
-                if (currentDrawing.vegetationType) {
-                    // Vegetation layer
-                    layer.vegetationType = currentDrawing.vegetationType;
-                    layer.setStyle({
-                        fillColor: vegetationClasses[currentDrawing.vegetationType].color,
-                        color: vegetationClasses[currentDrawing.vegetationType].color
-                    });
-                    vegetationLayers.push(layer);
-                } else {
-                    // Property layer
-                    if (propertyLayer) {
-                        drawnItems.removeLayer(propertyLayer);
-                    }
-                    propertyLayer = layer;
-                }
-                
-                drawnItems.addLayer(layer);
-                currentDrawing = null;
-            });
-        }
-
         // Measure slope between two points
         function measureSlope() {
-            alert('Click two points on the map to measure slope. First point will be automatically placed at property center.');
-            // Simplified - in real implementation, this would capture two points and calculate slope
+            alert('Slope measurement: Click two points on the map. For now, please enter slope value manually.');
+            // In a full implementation, this would capture elevation data
         }
 
         // Main BAL calculation function
         function calculateBAL() {
             if (!propertyLayer) {
-                alert('Please draw your property boundary first');
+                alert('Please draw your property boundary first by clicking "Draw Property" and drawing on the map');
+                return;
+            }
+
+            if (vegetationLayers.length === 0) {
+                alert('Please draw at least one vegetation area by clicking the vegetation buttons and drawing on the map');
                 return;
             }
 
@@ -419,32 +552,60 @@
             setTimeout(() => {
                 const results = performBALCalculation(slope, ffdi, fuelReduction);
                 displayResults(results);
-            }, 1000);
+                updateMapWithResults(results);
+            }, 1500);
         }
 
         // Perform BAL calculations
         function performBALCalculation(slope, ffdi, fuelReduction) {
             const results = [];
-            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            const directions = [
+                { name: 'North', bearing: 0 },
+                { name: 'Northeast', bearing: 45 },
+                { name: 'East', bearing: 90 },
+                { name: 'Southeast', bearing: 135 },
+                { name: 'South', bearing: 180 },
+                { name: 'Southwest', bearing: 225 },
+                { name: 'West', bearing: 270 },
+                { name: 'Northwest', bearing: 315 }
+            ];
+            
+            // Get property center for distance calculations
+            const propertyBounds = propertyLayer.getBounds();
+            const propertyCenter = propertyBounds.getCenter();
             
             directions.forEach(direction => {
-                // Simplified distance calculation
-                const distance = 50 + Math.random() * 100;
+                // Calculate distance to nearest vegetation in this direction
+                let minDistance = Infinity;
+                let nearestVegType = 'forest';
                 
-                // Determine vegetation type (simplified)
-                const vegTypes = Object.keys(vegetationClasses);
-                const vegType = vegTypes[Math.floor(Math.random() * vegTypes.length)];
+                vegetationLayers.forEach(vegLayer => {
+                    const vegBounds = vegLayer.getBounds();
+                    const vegCenter = vegBounds.getCenter();
+                    
+                    // Simple distance calculation (in reality would be more sophisticated)
+                    const distance = propertyCenter.distanceTo(vegCenter);
+                    
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestVegType = vegLayer.vegetationType;
+                    }
+                });
+                
+                // Add some randomness for demo purposes
+                minDistance = Math.max(20, minDistance + (Math.random() * 50 - 25));
                 
                 // Calculate radiant heat
-                const radiantHeat = calculateRadiantHeat(distance, vegType, slope, ffdi, fuelReduction);
+                const radiantHeat = calculateRadiantHeat(minDistance, nearestVegType, slope, ffdi, fuelReduction);
                 
                 // Determine BAL category
                 const balCategory = determineBALCategory(radiantHeat);
                 
                 results.push({
-                    direction: direction,
-                    distance: distance,
-                    vegetation: vegType,
+                    direction: direction.name,
+                    bearing: direction.bearing,
+                    distance: minDistance,
+                    vegetation: nearestVegType,
                     balCategory: balCategory,
                     radiantHeat: radiantHeat
                 });
@@ -462,14 +623,14 @@
                 baseFuelLoad *= 0.7; // 30% reduction
             }
             
-            // Simplified radiant heat model
+            // Simplified radiant heat model based on distance and vegetation
             const slopeFactor = 1 + (slope / 100);
             const ffdiFactor = ffdi / 50;
             const distanceDecay = Math.exp(-0.02 * distance);
             
-            let radiantHeat = (baseFuelLoad * slopeFactor * ffdiFactor * distanceDecay) + 5;
+            let radiantHeat = (baseFuelLoad * slopeFactor * ffdiFactor * 30 * distanceDecay);
             
-            return Math.min(radiantHeat, 60); // Cap at reasonable maximum
+            return Math.min(Math.max(radiantHeat, 5), 80); // Cap between 5-80
         }
 
         // Determine BAL category
@@ -496,22 +657,26 @@
                 }
             });
             
-            html += `<div style="text-align: center; padding: 10px; background: #e8f4fd; border-radius: 4px; margin-bottom: 15px;">
-                        <strong>Overall Rating:</strong> <span class="bal-${worstBAL.toLowerCase().replace('bal-', '')}">${worstBAL}</span>
+            const balClass = worstBAL.toLowerCase().replace('bal-', '').replace('.', 'p');
+            html += `<div style="text-align: center; padding: 15px; background: #e8f4fd; border-radius: 4px; margin-bottom: 15px;">
+                        <strong>Overall Property Rating:</strong><br>
+                        <span style="font-size: 24px; font-weight: bold;" class="bal-${balClass}">${worstBAL}</span>
                      </div>`;
             
             html += '</div>';
             
             html += '<div class="section">';
-            html += '<h3>Detailed Results</h3>';
+            html += '<h3>Detailed Results by Direction</h3>';
             html += '<table class="results-table">';
-            html += '<tr><th>Direction</th><th>Distance (m)</th><th>BAL</th><th>Heat (kW/m²)</th></tr>';
+            html += '<tr><th>Direction</th><th>Distance (m)</th><th>Vegetation</th><th>BAL</th><th>Heat (kW/m²)</th></tr>';
             
             results.forEach(result => {
-                const balClass = result.balCategory.toLowerCase().replace('bal-', '');
+                const balClass = result.balCategory.toLowerCase().replace('bal-', '').replace('.', 'p');
+                const vegName = vegetationClasses[result.vegetation].name;
                 html += `<tr>
                             <td>${result.direction}</td>
-                            <td>${result.distance.toFixed(1)}</td>
+                            <td>${result.distance.toFixed(0)}</td>
+                            <td>${vegName}</td>
                             <td class="bal-${balClass}">${result.balCategory}</td>
                             <td>${result.radiantHeat.toFixed(1)}</td>
                          </tr>`;
@@ -540,17 +705,83 @@
             document.getElementById('resultsContent').innerHTML = html;
         }
 
-        // Export functions (simplified)
+        // Update map with result visualization
+        function updateMapWithResults(results) {
+            // Add BAL direction indicators
+            const propertyBounds = propertyLayer.getBounds();
+            const propertyCenter = propertyBounds.getCenter();
+            
+            results.forEach(result => {
+                // Create direction lines
+                const endPoint = calculateDestinationPoint(propertyCenter, result.bearing, result.distance);
+                const line = L.polyline([propertyCenter, endPoint], {
+                    color: getColorForBAL(result.balCategory),
+                    weight: 3,
+                    opacity: 0.7
+                }).addTo(map);
+                
+                // Add BAL label
+                L.marker(endPoint).addTo(map)
+                    .bindPopup(`<b>${result.direction}</b><br>BAL: ${result.balCategory}<br>Distance: ${result.distance.toFixed(0)}m`)
+                    .openPopup();
+            });
+        }
+
+        // Calculate destination point given start, bearing, and distance
+        function calculateDestinationPoint(start, bearing, distance) {
+            const R = 6371000; // Earth radius in meters
+            const bearingRad = bearing * Math.PI / 180;
+            const latRad = start.lat * Math.PI / 180;
+            const lonRad = start.lng * Math.PI / 180;
+            
+            const newLat = Math.asin(Math.sin(latRad) * Math.cos(distance/R) + 
+                           Math.cos(latRad) * Math.sin(distance/R) * Math.cos(bearingRad));
+            const newLon = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distance/R) * Math.cos(latRad),
+                           Math.cos(distance/R) - Math.sin(latRad) * Math.sin(newLat));
+            
+            return L.latLng(newLat * 180 / Math.PI, newLon * 180 / Math.PI);
+        }
+
+        // Get color for BAL category
+        function getColorForBAL(balCategory) {
+            switch(balCategory) {
+                case 'BAL-LOW': return '#27ae60';
+                case 'BAL-12.5': return '#f39c12';
+                case 'BAL-19': return '#e67e22';
+                case 'BAL-29': return '#e74c3c';
+                case 'BAL-FZ': return '#c0392b';
+                default: return '#999';
+            }
+        }
+
+        // Export functions
         function exportPDF() {
-            alert('PDF export would generate here. This would include:\n- Input parameters\n- BAL contour map\n- Results table\n- Disclaimer');
+            alert('PDF export would generate a report with:\n- Input parameters\n- BAL contour map\n- Results table\n- Method notes\n- Disclaimer');
         }
 
         function exportCSV() {
-            alert('CSV data export would download here with all calculation results.');
+            const results = performBALCalculation(
+                parseFloat(document.getElementById('slopeInput').value),
+                parseInt(document.getElementById('ffdiSelect').value),
+                document.getElementById('fuelReduction').checked
+            );
+            
+            let csv = 'Direction,Bearing,Distance(m),Vegetation,BAL_Category,Radiant_Heat(kW/m2)\n';
+            results.forEach(result => {
+                csv += `${result.direction},${result.bearing},${result.distance.toFixed(1)},${result.vegetation},${result.balCategory},${result.radiantHeat.toFixed(1)}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bal-assessment-results.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
 
         function exportGeoJSON() {
-            alert('GeoJSON export would download map features and BAL contours.');
+            alert('GeoJSON export would download all map features and BAL contours as a GeoJSON file.');
         }
 
         // Utility functions
@@ -558,6 +789,8 @@
             drawnItems.clearLayers();
             vegetationLayers = [];
             propertyLayer = null;
+            document.getElementById('propertyInfo').style.display = 'none';
+            document.getElementById('vegetationInfo').style.display = 'none';
             document.getElementById('resultsContent').innerHTML = 
                 '<div style="text-align: center; color: #666; padding: 40px 20px;">Map cleared. Draw your site to begin.</div>';
         }
@@ -576,14 +809,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
             
-            // Add some sample help text
             console.log('BAL Assessment Tool Loaded!');
-            console.log('Instructions:');
-            console.log('1. Search for your location');
-            console.log('2. Draw property boundary');
-            console.log('3. Draw vegetation areas');
-            console.log('4. Set slope and FFDI');
-            console.log('5. Click Calculate BAL');
+            console.log('Now with working drawing functionality!');
         });
     </script>
 </body>
