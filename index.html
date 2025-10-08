@@ -6,6 +6,8 @@
     <title>BAL Assessment Tool</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -208,6 +210,19 @@
             border-radius: 4px;
             font-size: 12px;
         }
+
+        .pdf-template {
+            display: none;
+        }
+
+        .export-loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            background: #e8f4fd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -308,6 +323,84 @@
         </div>
     </div>
 
+    <!-- PDF Template (hidden) -->
+    <div id="pdfTemplate" class="pdf-template">
+        <div id="pdfContent" style="padding: 20px; font-family: Arial, sans-serif;">
+            <h1 style="color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;">
+                BAL Assessment Report
+            </h1>
+            
+            <div style="margin-bottom: 20px;">
+                <p><strong>Generated:</strong> <span id="pdfDate"></span></p>
+                <p><strong>Location:</strong> <span id="pdfLocation"></span></p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2c3e50;">Input Parameters</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><strong>Slope</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;" id="pdfSlope"></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><strong>FFDI</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;" id="pdfFFDI"></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><strong>Fuel Reduction</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;" id="pdfFuelReduction"></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><strong>Vegetation Areas</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;" id="pdfVegetationCount"></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2c3e50;">BAL Assessment Results</h3>
+                <div id="pdfSummary" style="background: #e8f4fd; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                    <!-- Summary will be inserted here -->
+                </div>
+                <div id="pdfResultsTable">
+                    <!-- Results table will be inserted here -->
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2c3e50;">Site Map</h3>
+                <div id="pdfMap" style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+                    <em>Map screenshot would appear here</em>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2c3e50;">Methodology & Limitations</h3>
+                <div style="background: #fff3cd; padding: 15px; border-radius: 4px; font-size: 12px;">
+                    <p><strong>Methods Used:</strong></p>
+                    <ul>
+                        <li>Empirical radiant heat model based on vegetation class and distance</li>
+                        <li>Slope enhancement factor applied to flame height</li>
+                        <li>FFDI scaling for fire intensity effects</li>
+                        <li>BAL thresholds per AS3959:2018 categories</li>
+                    </ul>
+                    <p><strong>Limitations:</strong></p>
+                    <ul>
+                        <li>Screening tool only - not for regulatory purposes</li>
+                        <li>Simplified terrain and wind effects</li>
+                        <li>Empirical approximations used where exact formulas unavailable</li>
+                        <li>Does not replace accredited bushfire consultant assessments</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div style="border-top: 2px solid #e74c3c; padding-top: 10px; font-size: 11px; color: #666;">
+                <p><strong>Citation:</strong> Based on CSIRO bushfire guidance: https://research.csiro.au/bushfire/assessing-bushfire-hazards/bal-assessment/</p>
+                <p><strong>Disclaimer:</strong> This report is generated by an automated screening tool. The results are indicative only and must not be used for regulatory, planning, or construction purposes. Always consult accredited bushfire consultants for formal assessments.</p>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script>
@@ -319,6 +412,7 @@
         let propertyLayer = null;
         let vegetationLayers = [];
         let activeVegetationButton = null;
+        let currentResults = null;
 
         // Vegetation classes with parameters
         const vegetationClasses = {
@@ -550,9 +644,9 @@
 
             // Simulate calculation delay
             setTimeout(() => {
-                const results = performBALCalculation(slope, ffdi, fuelReduction);
-                displayResults(results);
-                updateMapWithResults(results);
+                currentResults = performBALCalculation(slope, ffdi, fuelReduction);
+                displayResults(currentResults);
+                updateMapWithResults(currentResults);
             }, 1500);
         }
 
@@ -687,6 +781,7 @@
             
             html += '<div class="section">';
             html += '<h3>Export Results</h3>';
+            html += '<div class="export-loading" id="exportLoading">Generating export... Please wait</div>';
             html += '<div class="export-buttons">';
             html += '<button class="export-btn" onclick="exportPDF()">PDF Report</button>';
             html += '<button class="export-btn" onclick="exportCSV()">CSV Data</button>';
@@ -707,6 +802,13 @@
 
         // Update map with result visualization
         function updateMapWithResults(results) {
+            // Clear previous results
+            map.eachLayer(layer => {
+                if (layer instanceof L.Polyline && layer.options.color) {
+                    map.removeLayer(layer);
+                }
+            });
+            
             // Add BAL direction indicators
             const propertyBounds = propertyLayer.getBounds();
             const propertyCenter = propertyBounds.getCenter();
@@ -754,41 +856,305 @@
             }
         }
 
-        // Export functions
-        function exportPDF() {
-            alert('PDF export would generate a report with:\n- Input parameters\n- BAL contour map\n- Results table\n- Method notes\n- Disclaimer');
+        // Export to PDF
+        async function exportPDF() {
+            if (!currentResults) {
+                alert('Please calculate BAL results first');
+                return;
+            }
+
+            showExportLoading(true);
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Set PDF metadata
+                doc.setProperties({
+                    title: 'BAL Assessment Report',
+                    subject: 'Bushfire Attack Level Assessment',
+                    author: 'BAL Assessment Tool',
+                    keywords: 'bushfire, BAL, assessment, fire'
+                });
+
+                // Add content to PDF
+                await addContentToPDF(doc);
+                
+                // Save the PDF
+                doc.save('bal-assessment-report.pdf');
+                
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                alert('Error generating PDF: ' + error.message);
+            } finally {
+                showExportLoading(false);
+            }
         }
 
-        function exportCSV() {
-            const results = performBALCalculation(
-                parseFloat(document.getElementById('slopeInput').value),
-                parseInt(document.getElementById('ffdiSelect').value),
-                document.getElementById('fuelReduction').checked
-            );
+        // Add content to PDF document
+        async function addContentToPDF(doc) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 20;
+            let yPosition = margin;
+
+            // Title
+            doc.setFontSize(20);
+            doc.setTextColor(44, 62, 80);
+            doc.text('BAL Assessment Report', margin, yPosition);
+            yPosition += 15;
+
+            // Date and location
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            const now = new Date();
+            doc.text(`Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, margin, yPosition);
+            yPosition += 6;
             
-            let csv = 'Direction,Bearing,Distance(m),Vegetation,BAL_Category,Radiant_Heat(kW/m2)\n';
-            results.forEach(result => {
-                csv += `${result.direction},${result.bearing},${result.distance.toFixed(1)},${result.vegetation},${result.balCategory},${result.radiantHeat.toFixed(1)}\n`;
+            const locationText = document.getElementById('locationInfo').textContent || 'Location not specified';
+            doc.text(`Location: ${locationText}`, margin, yPosition);
+            yPosition += 15;
+
+            // Input Parameters
+            doc.setFontSize(14);
+            doc.setTextColor(44, 62, 80);
+            doc.text('Input Parameters', margin, yPosition);
+            yPosition += 10;
+
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            const inputs = [
+                `Slope: ${document.getElementById('slopeInput').value}%`,
+                `FFDI: ${document.getElementById('ffdiSelect').value}`,
+                `Fuel Reduction: ${document.getElementById('fuelReduction').checked ? 'Yes' : 'No'}`,
+                `Vegetation Areas: ${vegetationLayers.length}`
+            ];
+
+            inputs.forEach(input => {
+                doc.text(`• ${input}`, margin + 5, yPosition);
+                yPosition += 6;
+            });
+            yPosition += 10;
+
+            // BAL Summary
+            const worstBAL = findWorstBAL(currentResults);
+            doc.setFontSize(14);
+            doc.setTextColor(44, 62, 80);
+            doc.text('BAL Assessment Summary', margin, yPosition);
+            yPosition += 10;
+
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Overall Property Rating: ${worstBAL}`, margin, yPosition);
+            yPosition += 15;
+
+            // Results Table
+            doc.setFontSize(14);
+            doc.setTextColor(44, 62, 80);
+            doc.text('Detailed Results', margin, yPosition);
+            yPosition += 10;
+
+            // Table headers
+            doc.setFontSize(10);
+            const headers = ['Direction', 'Distance (m)', 'Vegetation', 'BAL', 'Heat (kW/m²)'];
+            const colWidths = [30, 25, 35, 25, 30];
+            let xPosition = margin;
+
+            headers.forEach((header, index) => {
+                doc.setTextColor(255, 255, 255);
+                doc.setFillColor(52, 73, 94);
+                doc.rect(xPosition, yPosition, colWidths[index], 8, 'F');
+                doc.text(header, xPosition + 2, yPosition + 5);
+                xPosition += colWidths[index];
+            });
+
+            yPosition += 8;
+
+            // Table rows
+            doc.setTextColor(0, 0, 0);
+            currentResults.forEach(result => {
+                xPosition = margin;
+                const row = [
+                    result.direction,
+                    result.distance.toFixed(0),
+                    vegetationClasses[result.vegetation].name,
+                    result.balCategory,
+                    result.radiantHeat.toFixed(1)
+                ];
+
+                row.forEach((cell, index) => {
+                    doc.text(cell, xPosition + 2, yPosition + 5);
+                    xPosition += colWidths[index];
+                });
+
+                yPosition += 8;
+
+                // Check for page break
+                if (yPosition > pageHeight - 50) {
+                    doc.addPage();
+                    yPosition = margin;
+                }
+            });
+
+            yPosition += 15;
+
+            // Methodology and Disclaimer
+            doc.setFontSize(14);
+            doc.setTextColor(44, 62, 80);
+            doc.text('Methodology & Limitations', margin, yPosition);
+            yPosition += 10;
+
+            doc.setFontSize(9);
+            doc.setTextColor(0, 0, 0);
+            const methodology = [
+                'Methods Used:',
+                '• Empirical radiant heat model based on vegetation class and distance',
+                '• Slope enhancement factor applied to flame height',
+                '• FFDI scaling for fire intensity effects',
+                '• BAL thresholds per AS3959:2018 categories',
+                '',
+                'Limitations:',
+                '• Screening tool only - not for regulatory purposes',
+                '• Simplified terrain and wind effects',
+                '• Empirical approximations used where exact formulas unavailable',
+                '• Does not replace accredited bushfire consultant assessments'
+            ];
+
+            methodology.forEach(line => {
+                if (yPosition > pageHeight - 20) {
+                    doc.addPage();
+                    yPosition = margin;
+                }
+                doc.text(line, margin, yPosition);
+                yPosition += 5;
+            });
+
+            // Footer
+            yPosition = pageHeight - 15;
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Based on CSIRO bushfire guidance: https://research.csiro.au/bushfire/assessing-bushfire-hazards/bal-assessment/', margin, yPosition);
+            yPosition += 4;
+            doc.text('Disclaimer: This report is generated by an automated screening tool. Results are indicative only and must not be used for regulatory purposes.', margin, yPosition);
+        }
+
+        // Export to CSV
+        function exportCSV() {
+            if (!currentResults) {
+                alert('Please calculate BAL results first');
+                return;
+            }
+
+            showExportLoading(true);
+
+            try {
+                // Get input parameters
+                const slope = document.getElementById('slopeInput').value;
+                const ffdi = document.getElementById('ffdiSelect').value;
+                const fuelReduction = document.getElementById('fuelReduction').checked ? 'Yes' : 'No';
+                const location = document.getElementById('locationInfo').textContent || 'Not specified';
+                
+                // Create CSV content
+                let csv = 'BAL Assessment Data Export\n';
+                csv += `Generated,${new Date().toLocaleString()}\n`;
+                csv += `Location,${location}\n`;
+                csv += `Slope (%),${slope}\n`;
+                csv += `FFDI,${ffdi}\n`;
+                csv += `Fuel Reduction,${fuelReduction}\n`;
+                csv += `Vegetation Areas,${vegetationLayers.length}\n\n`;
+                
+                // Results header
+                csv += 'Direction,Bearing (degrees),Distance (m),Vegetation Class,BAL Category,Radiant Heat (kW/m2)\n';
+                
+                // Results data
+                currentResults.forEach(result => {
+                    csv += `${result.direction},${result.bearing},${result.distance.toFixed(1)},${vegetationClasses[result.vegetation].name},${result.balCategory},${result.radiantHeat.toFixed(2)}\n`;
+                });
+                
+                // Additional metadata
+                csv += '\nAdditional Information:\n';
+                csv += 'Tool,BAL Assessment Tool (Screening Version)\n';
+                csv += 'Methodology,Empirical radiant heat model based on vegetation class and distance\n';
+                csv += 'Standards Reference,AS3959:2018 (approximated)\n';
+                csv += 'Disclaimer,This data is for screening purposes only. Not suitable for regulatory use.\n';
+                
+                // Create and download file
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `bal-assessment-${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+            } catch (error) {
+                console.error('CSV export error:', error);
+                alert('Error exporting CSV: ' + error.message);
+            } finally {
+                showExportLoading(false);
+            }
+        }
+
+        // Export to GeoJSON (placeholder)
+        function exportGeoJSON() {
+            alert('GeoJSON export would download all map features as a GeoJSON file. This feature requires additional implementation for full geospatial data export.');
+            
+            // Basic GeoJSON structure for demonstration
+            const geoJson = {
+                type: "FeatureCollection",
+                features: []
+            };
+            
+            // Add property boundary
+            if (propertyLayer) {
+                const propertyGeoJSON = propertyLayer.toGeoJSON();
+                propertyGeoJSON.properties = { type: 'property_boundary' };
+                geoJson.features.push(propertyGeoJSON);
+            }
+            
+            // Add vegetation areas
+            vegetationLayers.forEach(layer => {
+                const vegGeoJSON = layer.toGeoJSON();
+                vegGeoJSON.properties = { 
+                    type: 'vegetation',
+                    vegetation_class: layer.vegetationType,
+                    ...vegetationClasses[layer.vegetationType]
+                };
+                geoJson.features.push(vegGeoJSON);
             });
             
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'bal-assessment-results.csv';
-            a.click();
-            window.URL.revokeObjectURL(url);
-        }
-
-        function exportGeoJSON() {
-            alert('GeoJSON export would download all map features and BAL contours as a GeoJSON file.');
+            // Download GeoJSON
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geoJson, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "bal-assessment-map.geojson");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
         }
 
         // Utility functions
+        function findWorstBAL(results) {
+            const balOrder = { 'BAL-FZ': 5, 'BAL-29': 4, 'BAL-19': 3, 'BAL-12.5': 2, 'BAL-LOW': 1 };
+            return results.reduce((worst, result) => 
+                balOrder[result.balCategory] > balOrder[worst] ? result.balCategory : worst, 'BAL-LOW'
+            );
+        }
+
+        function showExportLoading(show) {
+            const loadingElement = document.getElementById('exportLoading');
+            if (loadingElement) {
+                loadingElement.style.display = show ? 'block' : 'none';
+            }
+        }
+
         function clearAll() {
             drawnItems.clearLayers();
             vegetationLayers = [];
             propertyLayer = null;
+            currentResults = null;
             document.getElementById('propertyInfo').style.display = 'none';
             document.getElementById('vegetationInfo').style.display = 'none';
             document.getElementById('resultsContent').innerHTML = 
@@ -808,9 +1174,7 @@
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
-            
-            console.log('BAL Assessment Tool Loaded!');
-            console.log('Now with working drawing functionality!');
+            console.log('BAL Assessment Tool Loaded with Export Functionality!');
         });
     </script>
 </body>
