@@ -1283,14 +1283,17 @@
             const ffdi = parseInt(document.getElementById('ffdiSelect').value);
             const fuelReduction = document.getElementById('fuelReduction').checked;
 
-            // Show loading
-            document.getElementById('resultsContent').innerHTML = `
-                <div class="loading">
-                    <div class="loading-spinner"></div>
-                    Calculating BAL... Please wait
-                    <p style="font-size: 12px; margin-top: 10px;">This may take a few seconds</p>
-                </div>
-            `;
+            // Show loading in the active tab
+            const activeTab = document.querySelector('.tab-content.active');
+            if (activeTab) {
+                activeTab.innerHTML = `
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Calculating BAL... Please wait
+                        <p style="font-size: 12px; margin-top: 10px;">This may take a few seconds</p>
+                    </div>
+                `;
+            }
 
             // Simulate calculation delay
             setTimeout(() => {
@@ -1461,7 +1464,7 @@
             return 'BAL-FZ';
         }
 
-        // Display results in right panel
+        // Display results in right panel - FIXED VERSION
         function displayResults(results) {
             // Find worst BAL
             const balOrder = { 'BAL-FZ': 5, 'BAL-29': 4, 'BAL-19': 3, 'BAL-12.5': 2, 'BAL-LOW': 1 };
@@ -1593,12 +1596,16 @@
             
             scenariosHtml += '</div>';
             
-            // Update all tab contents
-            document.getElementById('results-tab').innerHTML = resultsHtml;
-            document.getElementById('details-tab').innerHTML = detailsHtml;
-            document.getElementById('scenarios-tab').innerHTML = scenariosHtml;
+            // Update all tab contents - FIXED: Use the correct element IDs
+            const resultsTab = document.getElementById('results-tab');
+            const detailsTab = document.getElementById('details-tab');
+            const scenariosTab = document.getElementById('scenarios-tab');
             
-            // Add disclaimer
+            if (resultsTab) resultsTab.innerHTML = resultsHtml;
+            if (detailsTab) detailsTab.innerHTML = detailsHtml;
+            if (scenariosTab) scenariosTab.innerHTML = scenariosHtml;
+            
+            // Add disclaimer to results tab
             const disclaimerHtml = '<div class="disclaimer">';
             disclaimerHtml += '<strong><i class="fas fa-exclamation-triangle"></i> Method Notes:</strong><br>';
             disclaimerHtml += '• Enhanced empirical radiant heat model based on vegetation class, distance, and area<br>';
@@ -1608,7 +1615,7 @@
             disclaimerHtml += '• Screening tool only - consult accredited consultants for formal assessments';
             disclaimerHtml += '</div>';
             
-            document.getElementById('results-tab').innerHTML += disclaimerHtml;
+            if (resultsTab) resultsTab.innerHTML += disclaimerHtml;
         }
 
         // Load a specific scenario by index
@@ -2123,8 +2130,15 @@
             document.getElementById('propertyInfo').style.display = 'none';
             document.getElementById('vegetationInfo').style.display = 'none';
             document.getElementById('locationInfo').textContent = '';
-            document.getElementById('resultsContent').innerHTML = 
+            
+            // Reset tab contents to initial state
+            document.getElementById('results-tab').innerHTML = 
                 '<div style="text-align: center; color: #666; padding: 40px 20px;">Map cleared. Draw your site to begin.</div>';
+            document.getElementById('details-tab').innerHTML = 
+                '<div style="text-align: center; color: #666; padding: 40px 20px;">Detailed calculation results will appear here after running the assessment.</div>';
+            document.getElementById('scenarios-tab').innerHTML = 
+                '<div style="text-align: center; color: #666; padding: 40px 20px;">Save and compare different scenarios to understand how changes in inputs affect BAL ratings.</div>';
+            
             updateProgress();
         }
 
